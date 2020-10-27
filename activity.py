@@ -213,7 +213,7 @@ class TimeEntry:
         self.seconds =  self.total_time.seconds
         #self.hours = self.days * 24 + self.seconds // 3600
         #self.minutes = (self.seconds % 3600) // 60
-        self.seconds = self.seconds % 60
+        self.seconds = self.seconds
 
     def serialize(self):
         return {
