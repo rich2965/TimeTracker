@@ -61,33 +61,21 @@ data_table_entry = {'project_id': '',
 # default settings for GUI
 
 sg.ChangeLookAndFeel('DarkBlue3')
-
 # Table Build out
 tab1_layout = [
     [sg.Table(values=[],
               headings=header_list,
-              size=(500, 500),
               display_row_numbers=False,
               auto_size_columns=False,
-              num_rows=10,
+              def_col_width= 15,
               key='Table',
+              alternating_row_color= 'light blue',
               bind_return_key=True, tooltip="Double Click to Expand Details")]
 ]
 
-# noinspection PyTypeChecker
-tab2_layout = [
-    [sg.InputOptionMenu(values=list_of_projects, key="-PROJECT-"),  # InputOptionMenu doesn't take null
-     sg.Button('Search', button_color=('white', 'grey'), focus=True, key='Search')],
-    [sg.Table(values=[],
-              headings=header_list,
-              size=(500, 500),
-              col_widths=50,
-              display_row_numbers=False,
-              auto_size_columns=False,
-              num_rows=10,
-              key='Table2')]
 
-]
+
+
 
 # Column 1 Build Out
 
@@ -299,7 +287,7 @@ def main_tracker():
 ##-----MAIN EVENT LOOP-----------------------------------##
 while True:
     event, values = window.read(timeout=1000)
-    print(event)
+    #print(event)
     # print(values['-PROJECT-'])
     if event in (sg.WIN_CLOSED, 'Exit'):  # if user closed the window using X or clicked Exit button
         stop_threads = True
@@ -391,7 +379,7 @@ while True:
 
         # Secondary Window for Displaying Project StaTS
         layout2: list = [
-            [sg.Table(values=[],headings=header_list,size=(500, 500),col_widths=50,display_row_numbers=False,auto_size_columns=False,num_rows=10,key='Table2')]
+            [sg.Table(values=[],headings=header_list,display_row_numbers=False,auto_size_columns=False,def_col_width= 25,alternating_row_color= 'light blue',key='Table2')]
         ]
         window2: object = sg.Window('Time Tracker - Project View', layout=layout2, resizable=False)
         window2.Finalize()
