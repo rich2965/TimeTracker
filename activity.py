@@ -24,7 +24,7 @@ class ProjectList:
             return_list.append(
                 Project(
                     id = project['id'],
-                    sub_id = project['sub_id'],
+                    comments = project['comments'],
                     activities = self.get_activities_from_json(project)
                 )
             )
@@ -82,15 +82,15 @@ class ProjectList:
         return projects_
 
 class Project:
-    def __init__(self, id, sub_id,activities):
+    def __init__(self, id, comments,activities):
         self.id = id
-        self.sub_id = sub_id
+        self.comments = comments
         self.activities = activities
 
     def serialize(self):
         return {
             'id' : self.id,
-            'sub_id': self.sub_id,
+            'comments': self.comments,
             "activities": self.make_activities_to_json()
             }
     def make_activities_to_json(self):
