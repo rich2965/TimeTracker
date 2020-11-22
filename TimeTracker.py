@@ -7,8 +7,10 @@ import sys
 import PySimpleGUI as sg
 import threading
 import pandas as pd
+import os
+import xlsxwriter
 
-
+path= os.getcwd()
 now = datetime.datetime.now()
 session_start_time = now.strftime("%Y-%m-%d_%H-%M-%S")
 active_window_name = ""
@@ -25,6 +27,7 @@ project_list = ProjectList([])
 full_data_table = []
 list_of_projects = []
 project_stats=[]
+report_date_list =[]
 header_list = ["Project", "Time"]
 
 # Loading Previously Used Project Codes
@@ -37,10 +40,18 @@ try:
             loaded_project = Project(project, [], [])
             project_list.projects.append(loaded_project)
 
-
-
 except Exception:
     print('Unable to load previous project codes')
+
+# Create the 'activities' folder where the data will be stored
+activities_path = (str(path)+'\\activities')
+if not os.path.exists(activities_path):
+    print("what")
+    os.makedirs(activities_path)
+else:
+    print(activities_path)
+
+
 
 # Data objects for reading recorded data
 data_table_columns = {'project_id': [],
@@ -135,9 +146,12 @@ layout: list = [
     # [sg.Button('Load Previous Projects', button_color=('white', 'grey'),focus=True, key='Load')],
 ]
 
+report_layout = [[sg.Text('Select dates to generate a report for', key='-TXT-')],
+      [sg.Input(key='-START-', size=(20,1),disabled=True), sg.CalendarButton('Select Start Date',   target='-START-', no_titlebar=False,key='start_date',format='%Y-%m-%d 00:00:00')],
+      [sg.Input(key='-END-', size=(20,1),disabled=True), sg.CalendarButton('Select End Date',   target='-END-', no_titlebar=False,key='end_date',format='%Y-%m-%d 23:59:59')],
+      [sg.Button('Show Stats',key='Stats'),sg.Button('Generate',key='Generate')]]
 
-
-main_layout: list = [[sg.TabGroup([[sg.Tab('Time Tracking', layout)],[sg.Tab('Time Breakdown',tab1_layout)]],tab_location = 'bottomleft')]]
+main_layout: list = [[sg.TabGroup([[sg.Tab('Time Tracking', layout)],[sg.Tab('Time Breakdown',tab1_layout)],[sg.Tab('Reporting',report_layout)]],tab_location = 'bottomleft')]]
 
 
 window: object = sg.Window('Time Tracker', layout=main_layout, resizable=False,icon='time_icon.ico')
@@ -243,6 +257,25 @@ def calculate_time_spent_project(project_id):
     project_table = project_table.sort_values(by=['Time'],ascending = False)
     return (project_table.values.tolist())
 
+def calculate_time_spent_report(data_table):
+    data_table['time_start'] = pd.to_datetime(data_table['time_start'])
+    data_table['date'] = data_table['time_start'].dt.strftime('%Y%m%d')
+    sum_table = data_table.groupby(['project_id','date'], as_index=False)['time_seconds'].sum()
+    sum_table.columns = ['project_id', 'date','hours']
+    sum_table['hours'] = sum_table['hours'].div(3600).round(2)
+    pivot_table =sum_table.pivot(index='project_id',columns='date',values='hours')
+    return(pivot_table)
+
+def group_all_comments(data_table):
+    data_table['time_start'] = pd.to_datetime(data_table['time_start'])
+    data_table['date'] = data_table['time_start'].dt.strftime('%Y%m%d')
+    comments_table =  data_table[['project_id','comments','date']]
+    comments_table = comments_table.loc[comments_table.astype(str).drop_duplicates().index]
+    #comments_table = comments_table.groupby(['project_id','date'], as_index=False)['time_seconds'].count()
+    comments_table = comments_table.pivot(index='project_id',columns='date',values='comments')
+    return(comments_table)
+
+
 
 def load_full_data_to_table():
 
@@ -310,7 +343,7 @@ def main_tracker():
 ##-----MAIN EVENT LOOP-----------------------------------##
 while True:
     event, values = window.read(timeout=1000)
-    print(event)
+    #print(event)
     # print(values['-PROJECT-'])
     if event in (sg.WIN_CLOSED, 'Exit'):  # if user closed the window using X or clicked Exit button
         stop_threads = True
@@ -441,5 +474,82 @@ while True:
                 win2_active = False
                 break
         #sg.popup("Window for" +project_stats[(values['Table'][0])][0])
+    
+    if event =='Stats':
+        report_date_list = []
+        data_table = pd.DataFrame(data_table_columns)
+        print(values['-START-'], values['-END-'])
+        start_dt = values['-START-']
+        end_dt = values['-END-']
+        for dt in pd.date_range(start_dt, end_dt):
+            report_date_list.append(dt.strftime("%Y-%m-%d"))
+        json_files = [pos_json for pos_json in os.listdir('activities/') if any(date in pos_json for date in report_date_list) ]
+        for file in json_files:
+            with open(os.path.join('activities/',file)) as json_file:
+                data = json.load(json_file)
+                for project in data['projects']:
+                    for activity in project['activities']:
+                        for sub_activity in activity['sub_names']:
+                            for time in sub_activity['time_entries']:
+                                data_table_entry['project_id'] = project['id']
+                                data_table_entry['comments'] = project['comments']
+                                data_table_entry['activity_name'] = activity['name']
+                                data_table_entry['sub_activity_name'] = sub_activity['sub_name']
+                                data_table_entry['time_seconds'] = time['seconds']
+                                data_table_entry['time_start'] = time['start_time']
+                                data_table_entry['time_end'] = time['end_time']
+                                data_table = data_table.append(data_table_entry, ignore_index=True)
+        
+        output_data = calculate_time_spent(data_table)
+        
+        win3_active = True
+        layout3: list = [
+            [sg.Table(values=[],headings=['Project','Time'],display_row_numbers=False,auto_size_columns=False,def_col_width= 25,alternating_row_color= 'navy blue',key='Table3')]
+        ]
+        window3: object = sg.Window('Time Spent on Projects', layout=layout3, resizable=False)
+        window3.Finalize()
+        window3['Table3'].update(output_data)
+
+        while True:
+            event, values = window3.read()
+
+            if event in (sg.WIN_CLOSED, 'Exit'):  # if user closed the window using X or clicked Exit button
+                window3.Close()
+                win3_active = False
+                break
+
+
+    if event =='Generate':
+        report_date_list = []
+        data_table = pd.DataFrame(data_table_columns)
+        print(values['-START-'], values['-END-'])
+        start_dt = values['-START-']
+        end_dt = values['-END-']
+        for dt in pd.date_range(start_dt, end_dt):
+            report_date_list.append(dt.strftime("%Y-%m-%d"))
+        json_files = [pos_json for pos_json in os.listdir('activities/') if any(date in pos_json for date in report_date_list) ]
+        for file in json_files:
+            with open(os.path.join('activities/',file)) as json_file:
+                data = json.load(json_file)
+                for project in data['projects']:
+                    for activity in project['activities']:
+                        for sub_activity in activity['sub_names']:
+                            for time in sub_activity['time_entries']:
+                                data_table_entry['project_id'] = project['id']
+                                data_table_entry['comments'] = project['comments']
+                                data_table_entry['activity_name'] = activity['name']
+                                data_table_entry['sub_activity_name'] = sub_activity['sub_name']
+                                data_table_entry['time_seconds'] = time['seconds']
+                                data_table_entry['time_start'] = time['start_time']
+                                data_table_entry['time_end'] = time['end_time']
+                                data_table = data_table.append(data_table_entry, ignore_index=True)
+        
+        output_data = calculate_time_spent_report(data_table)
+        comments_data = group_all_comments(data_table)
+        report_name = 'Timesheet_Data.xlsx'
+        writer = pd.ExcelWriter(report_name, engine='xlsxwriter')
+        output_data.to_excel(writer,sheet_name = 'Main_Data')
+        comments_data.to_excel(writer,sheet_name ='Comments')
+        writer.save()
 
 window.close()
